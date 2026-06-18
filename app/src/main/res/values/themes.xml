@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Aperture" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Day/night window background so the pre-Compose launch frame matches the app theme
+             (was white from the Light parent → a flash). @color/window_background flips in -night. -->
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+
+    <!-- Invisible theme for the transparent launcher bridge activity. -->
+    <style name="Theme.Transparent" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+</resources>

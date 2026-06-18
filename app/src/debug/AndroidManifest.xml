@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Debug builds only: allow cleartext HTTP so we can test against the dev backend over LAN
+      (e.g. http://10.0.2.2:8081 / http://<laptop-ip>). Production is full HTTPS, so the release
+      manifest has no cleartext exception. RTSP is a raw TCP socket and is exempt either way.
+    -->
+    <application android:usesCleartextTraffic="true" />
+
+</manifest>

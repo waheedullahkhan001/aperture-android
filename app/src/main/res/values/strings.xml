@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Aperture Client</string>
+
+    <!-- Accessibility service -->
+    <string name="accessibility_service_description">Lets Aperture detect your volume-button shortcut to start recording. It only watches volume-button presses — it does not read screen content or any other information on your device.</string>
+
+    <!-- Recording notification (discreet by default; style becomes user-configurable in M3) -->
+    <string name="recording_channel_name">Recording</string>
+    <string name="recording_notification_title">Aperture</string>
+    <string name="recording_notification_text">Running</string>
+</resources>
