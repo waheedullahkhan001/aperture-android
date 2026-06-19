@@ -18,7 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import com.fuuastisb.aperture.MainActivity
 import com.fuuastisb.aperture.R
 import com.fuuastisb.aperture.core.di.ApplicationScope
-import com.fuuastisb.aperture.data.metadata.MetadataCollector
+import com.fuuastisb.aperture.data.metadata.MetadataReporter
 import com.fuuastisb.aperture.data.recordings.RecordingsRepository
 import com.fuuastisb.aperture.data.server.AlertCanceller
 import com.fuuastisb.aperture.data.server.DeviceApi
@@ -27,7 +27,7 @@ import com.fuuastisb.aperture.data.settings.SettingsRepository
 import com.fuuastisb.aperture.data.upload.PendingUploadStore
 import com.fuuastisb.aperture.data.upload.UploadManager
 import com.fuuastisb.aperture.domain.model.EmergencyState
-import com.fuuastisb.aperture.domain.model.MetadataSnapshot
+import com.fuuastisb.aperture.domain.model.MetadataConfig
 import com.fuuastisb.aperture.domain.model.NotificationStyle
 import com.fuuastisb.aperture.domain.model.PendingUpload
 import com.fuuastisb.aperture.domain.model.RecordingState
@@ -56,7 +56,7 @@ class RecordingService : LifecycleService() {
     @Inject lateinit var stateHolder: RecordingStateHolder
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var recordingsRepository: RecordingsRepository
-    @Inject lateinit var metadataCollector: MetadataCollector
+    @Inject lateinit var metadataReporter: MetadataReporter
     @Inject lateinit var deviceApi: DeviceApi
     @Inject lateinit var alertCanceller: AlertCanceller
     @Inject lateinit var pendingUploadStore: PendingUploadStore
@@ -123,9 +123,6 @@ class RecordingService : LifecycleService() {
                 }
             }
 
-            val metadata = metadataCollector.collect(settingsRepository.metadataConfigSnapshot())
-            Log.d(TAG, "Captured metadata: $metadata")
-
             val freeBytes = getExternalFilesDir(null)?.usableSpace ?: Long.MAX_VALUE
             if (freeBytes < MIN_FREE_BYTES) {
                 stateHolder.setError("Not enough free storage to record. Free up space, or turn on auto-delete.")
@@ -190,7 +187,7 @@ class RecordingService : LifecycleService() {
                 // Announce to the backend off the recording path — returns the server-driven alert
                 // countdown + watch URL and queues the captured metadata. Never blocks capture.
                 if (server.isConfigured) {
-                    launchBackendSession(id, server, metadata)
+                    launchBackendSession(id, server, settingsRepository.metadataConfigSnapshot())
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start recording", e)
@@ -232,16 +229,18 @@ class RecordingService : LifecycleService() {
      * Tell the backend a recording started (returns the server-driven alert countdown + watch URL) and
      * queue the captured metadata. Fully guarded — a backend failure must never disturb the recording.
      */
-    private fun launchBackendSession(id: String, server: ServerConfig, metadata: MetadataSnapshot) {
-        // On the process scope so a slow PUT / metadata post still completes if the user stops quickly.
-        // The countdown it may start runs on lifecycleScope and self-terminates when `active` clears.
+    private fun launchBackendSession(id: String, server: ServerConfig, metadataConfig: MetadataConfig) {
+        // On the process scope so a slow PUT still completes if the user stops quickly. The countdown
+        // it may start runs on lifecycleScope and self-terminates when `active` clears.
         appScope.launch {
             runCatching {
                 val created = deviceApi.createRecording(server, id, Instant.now().toString())
                 if (active && created?.countdownEndsAt != null) startServerCountdown(created.countdownEndsAt)
-                deviceApi.postMetadataSample(server, id, metadata)
             }.onFailure { Log.w(TAG, "backend session failed (non-fatal)", it) }
         }
+        // Stream live metadata (active location + battery) to the server for the duration of the
+        // recording — the emergency live view's moving location. Stopped in teardown()/onDestroy().
+        metadataReporter.start(id, server, metadataConfig)
     }
 
     /**
@@ -299,6 +298,7 @@ class RecordingService : LifecycleService() {
 
     private fun teardown() {
         active = false
+        metadataReporter.stop()
         countdownJob?.cancel()
         countdownJob = null
         startupJob = null
@@ -317,6 +317,7 @@ class RecordingService : LifecycleService() {
         // teardown(): never leave the wake lock held or a pipeline running.
         startupJob?.cancel()
         countdownJob?.cancel()
+        metadataReporter.stop()
         try { recorder?.stop() } catch (e: Exception) { Log.w(TAG, "recorder stop on destroy", e) }
         recorder = null
         sessionId = null
@@ -330,17 +331,24 @@ class RecordingService : LifecycleService() {
     private fun startForegroundCompat(style: NotificationStyle) {
         createChannel()
         val notification = buildNotification(style)
+        // Claim the location FGS type only when location is granted, so live location works even with
+        // the screen off (Android 14+ requires it for background location during the service).
+        val location = if (metadataReporter.canUseLocationForegroundType()) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        } else {
+            0
+        }
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> startForeground(
                 NOTIFICATION_ID,
                 notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or location,
             )
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> startForeground(
                 NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or location,
             )
             else -> startForeground(NOTIFICATION_ID, notification)
         }

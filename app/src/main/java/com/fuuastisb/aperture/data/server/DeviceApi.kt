@@ -116,6 +116,11 @@ class DeviceApi @Inject constructor() {
                     m.latitude?.let { put("latitude", it) }
                     m.longitude?.let { put("longitude", it) }
                     m.deviceModel?.let { put("deviceInfo", it.take(255)) } // server caps deviceInfo at 255
+                    m.horizontalAccuracyM?.let { put("horizontalAccuracyM", it) }
+                    m.speedMps?.let { put("speedMps", it) }
+                    m.bearingDeg?.let { put("bearingDeg", it) }
+                    m.altitudeM?.let { put("altitudeM", it) }
+                    m.batteryPercent?.let { put("batteryPercent", it) }
                 }
                 val body = JSONObject().put("samples", JSONArray().put(sample)).toString().toRequestBody(JSON)
                 client.newCall(builder(config, "$RECORDINGS/$id/metadata-samples").post(body).build())
