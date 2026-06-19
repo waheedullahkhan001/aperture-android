@@ -18,6 +18,8 @@ import com.pedro.library.generic.GenericStream
 import com.pedro.library.util.BitrateAdapter
 import com.pedro.rtsp.rtsp.Protocol
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
@@ -33,6 +35,11 @@ import java.util.Locale
  * Network resilience: a [BitrateAdapter] lowers/raises the live video bitrate as the link changes,
  * and a dropped connection auto-reconnects (bounded retries) without disturbing local recording.
  * Honours the shared [RecordingConfig.lens]; quality and fps come from the chosen config.
+ *
+ * Retro-upload: the local copy is recorded in rotating ~30s **chunks** (so a chunk recorded while the
+ * stream was down can be uploaded mid-recording — an emergency recording may never cleanly stop). As
+ * each chunk finalises it's published to the gallery and reported via [onChunk]; a chunk that wasn't
+ * live for its whole span is flagged for retro-upload (the server only lacks those).
  */
 class StreamingRecorder(
     private val context: Context,
@@ -41,12 +48,26 @@ class StreamingRecorder(
     private val config: RecordingConfig,
     private val audioEnabled: Boolean,
     private val onStreamingState: (StreamingState) -> Unit,
-    private val onFinalized: (Uri?) -> Unit,
+    // Per finalized chunk: published Uri, wall-clock start/end, 1-based segment number, and whether the
+    // stream was live for the chunk's whole span (if not, the server is missing it → retro-upload).
+    private val onChunk: (Uri?, Long, Long, Int, Boolean) -> Unit,
+    // Called once after the final chunk, to tear the service down.
+    private val onFinalized: () -> Unit,
 ) : Recorder, ConnectChecker {
 
     private var stream: GenericStream? = null
-    private var localFile: File? = null
     private var bitrateAdapter: BitrateAdapter? = null
+
+    // Chunked local recording. Guarded by [recLock] because the rotation timer and stop() both touch it.
+    private val recLock = Any()
+    private var recStarted = false
+    private var rotationJob: Job? = null
+    private var chunkDir: File? = null
+    private var currentChunkFile: File? = null
+    private var chunkIndex = 0
+    private var chunkStartWallMs = 0L
+    private var chunkFullyLive = false       // was the stream live for this chunk's entire span?
+    @Volatile private var streamLive = false // current live state, sampled when a chunk starts
 
     // Set when we initiate stop(), so the stopStream-triggered callbacks don't try to reconnect.
     @Volatile private var stopping = false
@@ -84,17 +105,21 @@ class StreamingRecorder(
             throw IllegalStateException("Failed to prepare stream encoders")
         }
 
-        // Local copy is optional (the user can stream without keeping one). When off, only the
-        // network push runs and stop() finalises with no file to publish.
+        // Local copy is optional (the user can stream without keeping one). When kept, it's recorded in
+        // rotating ~30s chunks so a chunk can be uploaded mid-recording (see class doc). When off, only
+        // the network push runs.
         if (config.saveLocally) {
-            val dir = File(context.getExternalFilesDir(Environment.DIRECTORY_MOVIES), "Aperture")
+            chunkDir = File(context.getExternalFilesDir(Environment.DIRECTORY_MOVIES), "Aperture")
                 .apply { mkdirs() }
-            val file = File(dir, "emergency_${TIMESTAMP_FORMAT.format(Date())}.mp4")
-            localFile = file
-            try {
-                genericStream.startRecord(file.absolutePath) { status -> Log.d(TAG, "record status: $status") }
-            } catch (e: Exception) {
-                Log.e(TAG, "startRecord failed", e)
+            synchronized(recLock) {
+                recStarted = true
+                startChunk()
+            }
+            rotationJob = scope.launch {
+                while (recStarted) {
+                    delay(CHUNK_MS)
+                    synchronized(recLock) { if (recStarted) rotateChunk() }
+                }
             }
         }
 
@@ -113,20 +138,60 @@ class StreamingRecorder(
 
     override fun stop() {
         stopping = true // suppress reconnect attempts from the stopStream-triggered callbacks
+        streamLive = false
         val active = stream
-        val file = localFile
         try { if (active?.isStreaming == true) active.stopStream() } catch (e: Exception) { Log.w(TAG, "stopStream", e) }
-        try { if (active?.isRecording == true) active.stopRecord() } catch (e: Exception) { Log.w(TAG, "stopRecord", e) }
+        synchronized(recLock) {
+            recStarted = false
+            rotationJob?.cancel()
+            rotationJob = null
+            finalizeChunk() // stop + publish + report the final chunk
+        }
         bitrateAdapter = null
         releaseQuietly()
         onStreamingState(StreamingState.Off)
-        localFile = null
+        onFinalized()
+    }
 
-        if (file != null) {
-            scope.launch { onFinalized(MediaStorePublisher.publish(context, file)) }
-        } else {
-            onFinalized(null)
+    /** Begin a new local chunk. Must hold [recLock]. */
+    private fun startChunk() {
+        val dir = chunkDir ?: return
+        val file = File(dir, "rec_${TIMESTAMP_FORMAT.format(Date())}_${chunkIndex + 1}.mp4")
+        try {
+            stream?.startRecord(file.absolutePath) { status -> Log.d(TAG, "record status: $status") }
+            currentChunkFile = file
+            chunkIndex += 1
+            chunkStartWallMs = System.currentTimeMillis()
+            chunkFullyLive = streamLive // only "fully live" if the stream is up for the whole chunk
+        } catch (e: Exception) {
+            Log.e(TAG, "startRecord (chunk $chunkIndex) failed", e)
+            currentChunkFile = null
         }
+    }
+
+    /** Finalise the current chunk (stop record, publish, report). Must hold [recLock]. */
+    private fun finalizeChunk() {
+        val file = currentChunkFile ?: return
+        val startWall = chunkStartWallMs
+        val endWall = System.currentTimeMillis()
+        val segment = chunkIndex
+        val fullyLive = chunkFullyLive
+        currentChunkFile = null
+        try { if (stream?.isRecording == true) stream?.stopRecord() } catch (e: Exception) { Log.w(TAG, "stopRecord (chunk)", e) }
+        // Publish to the gallery + report off the lock (publish is IO and survives teardown).
+        scope.launch { onChunk(MediaStorePublisher.publish(context, file), startWall, endWall, segment, fullyLive) }
+    }
+
+    /** Rotation tick: close the current chunk and open the next. Must hold [recLock]. */
+    private fun rotateChunk() {
+        finalizeChunk()
+        startChunk()
+    }
+
+    /** The stream is no longer delivering — the current chunk is no longer fully-live. */
+    private fun markStreamDown() {
+        streamLive = false
+        chunkFullyLive = false
     }
 
     private fun releaseQuietly() {
@@ -138,11 +203,15 @@ class StreamingRecorder(
     override fun onConnectionStarted(url: String) = onStreamingState(StreamingState.Connecting)
 
     override fun onConnectionSuccess() {
+        // Mark live, but DON'T flip the current chunk back to "fully live" — if it was down for any of
+        // this chunk, the chunk still needs uploading; only the NEXT chunk starts fresh as fully-live.
+        streamLive = true
         bitrateAdapter?.setMaxBitrate(videoBitrate()) // reset the ceiling after a (re)connect
         onStreamingState(StreamingState.Live)
     }
 
     override fun onConnectionFailed(reason: String) {
+        markStreamDown() // stream is down until the next success — this chunk now needs uploading
         // Try to reconnect (unless we're the ones stopping). Local recording is unaffected either way;
         // only when the retry budget is exhausted do we surface a hard failure.
         if (!stopping) {
@@ -158,8 +227,14 @@ class StreamingRecorder(
         onStreamingState(StreamingState.Failed(reason.replace(Regex("token=[^&\\s]+"), "token=***")))
     }
 
-    override fun onDisconnect() = onStreamingState(StreamingState.Off)
-    override fun onAuthError() = onStreamingState(StreamingState.Failed("Auth error"))
+    override fun onDisconnect() {
+        markStreamDown()
+        onStreamingState(StreamingState.Off)
+    }
+    override fun onAuthError() {
+        markStreamDown()
+        onStreamingState(StreamingState.Failed("Auth error"))
+    }
     override fun onAuthSuccess() = Unit
 
     override fun onNewBitrate(bitrate: Long) {
@@ -208,6 +283,7 @@ class StreamingRecorder(
         const val STREAM_RETRIES = 8         // reconnect attempts before giving up (local keeps going)
         const val RETRY_DELAY_MS = 5_000L    // wait between reconnect attempts
         const val KEYFRAME_INTERVAL_S = 2    // ≤2s so the server can split its 30s segments at keyframes
+        const val CHUNK_MS = 30_000L         // rotate the local recording every ~30s (matches server segments)
         val TIMESTAMP_FORMAT = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
     }
 }

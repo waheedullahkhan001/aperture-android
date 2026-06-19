@@ -24,12 +24,16 @@ import com.fuuastisb.aperture.data.server.AlertCanceller
 import com.fuuastisb.aperture.data.server.DeviceApi
 import com.fuuastisb.aperture.data.server.StreamTarget
 import com.fuuastisb.aperture.data.settings.SettingsRepository
+import com.fuuastisb.aperture.data.upload.PendingUploadStore
+import com.fuuastisb.aperture.data.upload.UploadManager
 import com.fuuastisb.aperture.domain.model.EmergencyState
 import com.fuuastisb.aperture.domain.model.MetadataSnapshot
 import com.fuuastisb.aperture.domain.model.NotificationStyle
+import com.fuuastisb.aperture.domain.model.PendingUpload
 import com.fuuastisb.aperture.domain.model.RecordingState
 import com.fuuastisb.aperture.domain.model.ServerConfig
 import com.fuuastisb.aperture.domain.model.StreamingState
+import com.fuuastisb.aperture.domain.model.label
 import com.fuuastisb.aperture.domain.model.minQuality
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -55,6 +59,8 @@ class RecordingService : LifecycleService() {
     @Inject lateinit var metadataCollector: MetadataCollector
     @Inject lateinit var deviceApi: DeviceApi
     @Inject lateinit var alertCanceller: AlertCanceller
+    @Inject lateinit var pendingUploadStore: PendingUploadStore
+    @Inject lateinit var uploadManager: UploadManager
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
     private lateinit var wakeLock: PowerManager.WakeLock
@@ -159,6 +165,7 @@ class RecordingService : LifecycleService() {
                         fps = minOf(streamSettings.fps, config.fps),
                     )
                 }
+                val qualityLabel = streamCapture.quality.label
                 StreamingRecorder(
                     context = this@RecordingService,
                     url = streamUrl,
@@ -166,7 +173,10 @@ class RecordingService : LifecycleService() {
                     config = streamCapture,
                     audioEnabled = streamSettings.streamAudio,
                     onStreamingState = ::updateStreamingState,
-                    onFinalized = ::onFinalized,
+                    onChunk = { uri, startWall, endWall, segment, fullyLive ->
+                        handleChunk(id, server, qualityLabel, uri, startWall, endWall, segment, fullyLive)
+                    },
+                    onFinalized = { onFinalized(null) },
                 )
             } else {
                 CameraXRecorder(this@RecordingService, this@RecordingService, config, ::onFinalized)
@@ -259,6 +269,32 @@ class RecordingService : LifecycleService() {
     private fun onFinalized(uri: Uri?) {
         if (uri != null) Log.d(TAG, "Recording saved: $uri")
         teardown()
+    }
+
+    /**
+     * A local recording chunk finalised: it's already published to the gallery; if the stream wasn't
+     * live for its whole span the server is missing it, so enqueue it for retro-upload. Best-effort and
+     * off the recording path; [UploadManager] uploads it when online (mid-recording, throttled).
+     */
+    private fun handleChunk(
+        id: String,
+        server: ServerConfig,
+        quality: String,
+        uri: Uri?,
+        startWallMs: Long,
+        endWallMs: Long,
+        segment: Int,
+        fullyLive: Boolean,
+    ) {
+        if (uri == null || fullyLive || !server.isConfigured) return // server already has live chunks
+        appScope.launch {
+            runCatching {
+                pendingUploadStore.add(
+                    PendingUpload(id, segment, uri.toString(), startWallMs, endWallMs, quality),
+                )
+                uploadManager.kick()
+            }.onFailure { Log.w(TAG, "enqueue chunk upload failed (non-fatal)", it) }
+        }
     }
 
     private fun teardown() {

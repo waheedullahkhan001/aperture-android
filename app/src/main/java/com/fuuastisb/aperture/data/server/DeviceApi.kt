@@ -5,12 +5,17 @@ import com.fuuastisb.aperture.domain.model.ServerConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.BufferedSink
+import okio.source
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.InputStream
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -49,6 +54,13 @@ class DeviceApi @Inject constructor() {
 
     private val client = OkHttpClient.Builder()
         .callTimeout(15, TimeUnit.SECONDS)
+        .build()
+
+    // Clip uploads can be large/slow — no overall call timeout; rely on connect + socket timeouts.
+    private val uploadClient = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .writeTimeout(0, TimeUnit.SECONDS)
+        .callTimeout(0, TimeUnit.SECONDS)
         .build()
 
     /** Validates server identity AND token in one call (unlike the public, token-ignoring health route). */
@@ -103,7 +115,7 @@ class DeviceApi @Inject constructor() {
                     put("clientTimestamp", Instant.ofEpochMilli(m.timestampMs).toString())
                     m.latitude?.let { put("latitude", it) }
                     m.longitude?.let { put("longitude", it) }
-                    m.deviceModel?.let { put("deviceInfo", it) }
+                    m.deviceModel?.let { put("deviceInfo", it.take(255)) } // server caps deviceInfo at 255
                 }
                 val body = JSONObject().put("samples", JSONArray().put(sample)).toString().toRequestBody(JSON)
                 client.newCall(builder(config, "$RECORDINGS/$id/metadata-samples").post(body).build())
@@ -125,6 +137,43 @@ class DeviceApi @Inject constructor() {
         }.getOrDefault(CancelOutcome.Failed)
     }
 
+    /**
+     * Upload a locally-saved clip (multipart). Streams the file (never loads it into memory) and is
+     * idempotent per (recordingId, segmentNumber), so a retry after a timeout is safe. Returns true on 2xx.
+     */
+    suspend fun uploadClip(
+        config: ServerConfig,
+        recordingId: String,
+        fileName: String,
+        sizeBytes: Long,
+        startIso: String,
+        endIso: String,
+        quality: String?,
+        segmentNumber: Int?,
+        openStream: () -> InputStream,
+    ): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val fileBody = object : RequestBody() {
+                override fun contentType() = MP4
+                override fun contentLength() = sizeBytes
+                override fun writeTo(sink: BufferedSink) {
+                    openStream().use { sink.writeAll(it.source()) }
+                }
+            }
+            val multipart = MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("file", fileName, fileBody)
+                .addFormDataPart("startTime", startIso)
+                .addFormDataPart("endTime", endIso)
+                .apply {
+                    quality?.let { addFormDataPart("quality", it) }
+                    segmentNumber?.let { addFormDataPart("segmentNumber", it.toString()) }
+                }
+                .build()
+            uploadClient.newCall(builder(config, "$RECORDINGS/$recordingId/clips").post(multipart).build())
+                .execute().use { it.isSuccessful }
+        }.getOrDefault(false)
+    }
+
     private fun builder(config: ServerConfig, path: String): Request.Builder = Request.Builder()
         .url(config.baseUrl.trim().trimEnd('/') + path)
         .header("Authorization", "Bearer ${config.token.trim()}")
@@ -138,6 +187,7 @@ class DeviceApi @Inject constructor() {
     private companion object {
         const val RECORDINGS = "/api/v1/device/recordings"
         val JSON = "application/json; charset=utf-8".toMediaType()
+        val MP4 = "video/mp4".toMediaType()
         val EMPTY = ByteArray(0).toRequestBody()
     }
 }

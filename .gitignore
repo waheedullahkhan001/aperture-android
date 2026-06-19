@@ -16,3 +16,6 @@ keystore.properties
 # Project docs & instructions — kept local, never published (code-only repo)
 /docs/
 /CLAUDE.md
+
+# Local agent/session tooling
+/.claude/

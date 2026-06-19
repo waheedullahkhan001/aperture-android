@@ -17,6 +17,14 @@ val VideoQuality.rank: Int
 /** The lower of two qualities — so a stream is never asked to exceed local quality. */
 fun minQuality(a: VideoQuality, b: VideoQuality): VideoQuality = if (a.rank <= b.rank) a else b
 
+/** Human label used for the server's per-clip quality field and the UI. */
+val VideoQuality.label: String
+    get() = when (this) {
+        VideoQuality.FHD -> "1080p"
+        VideoQuality.HD -> "720p"
+        VideoQuality.SD -> "480p"
+    }
+
 /** User-configurable capture settings applied to each recording session (SRS-020..022). */
 data class RecordingConfig(
     val lens: CameraLens = CameraLens.BACK,
