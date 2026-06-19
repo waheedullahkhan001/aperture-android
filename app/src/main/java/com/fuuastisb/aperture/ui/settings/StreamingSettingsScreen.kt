@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -17,6 +18,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -33,8 +36,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.QrCode
 import com.fuuastisb.aperture.data.server.ServerHealth
 import com.fuuastisb.aperture.domain.model.VideoQuality
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import com.fuuastisb.aperture.domain.model.minQuality
 import com.fuuastisb.aperture.domain.model.rank
 
@@ -53,11 +60,15 @@ fun StreamingSettingsScreen(
     val server by viewModel.serverConfig.collectAsStateWithLifecycle()
     val recording by viewModel.recordingConfig.collectAsStateWithLifecycle()
     val status by viewModel.serverStatus.collectAsStateWithLifecycle()
-    val testing by viewModel.testing.collectAsStateWithLifecycle()
+    val connectState by viewModel.connectState.collectAsStateWithLifecycle()
 
-    var baseUrl by remember(server.baseUrl) { mutableStateOf(server.baseUrl) }
-    var token by remember(server.token) { mutableStateOf(server.token) }
+    var connectCode by remember { mutableStateOf("") }
     var streamUrl by remember(stream.url) { mutableStateOf(stream.url) }
+
+    // GMS-free QR scan via ZXing's embedded scanner; a successful scan fills the connect-code box.
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        result.contents?.let { connectCode = it }
+    }
 
     val mediaReachable = status.media == ServerHealth.Reachable
     val streamUrlValid = streamUrl.isBlank() || looksLikeStreamUrl(streamUrl.trim())
@@ -69,33 +80,67 @@ fun StreamingSettingsScreen(
                 .padding(20.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            // --- Backend (Spring API): base URL + token ---
-            Text("Backend (API)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            // --- Pair this device: one connect code (paste or scan) carries the server + token ---
+            Text("Pair this device", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Log in on the web to get an access token, then paste your server URL and token here — " +
-                    "the app never handles your password.",
+                "On the web, create a connect code for this device, then paste it below — or scan its QR. " +
+                    "It carries your server and access token; the app never handles your password.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
-                value = baseUrl,
-                onValueChange = { baseUrl = it },
+                value = connectCode,
+                onValueChange = { connectCode = it },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("Server base URL") },
-                placeholder = { Text("https://aperture.example.com") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                label = { Text("Paste connect code") },
+                trailingIcon = {
+                    IconButton(onClick = {
+                        scanLauncher.launch(
+                            ScanOptions()
+                                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                                .setPrompt("Scan the pairing QR")
+                                .setBeepEnabled(false)
+                                .setOrientationLocked(false),
+                        )
+                    }) {
+                        Icon(Lucide.QrCode, contentDescription = "Scan QR code")
+                    }
+                },
             )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = token,
-                onValueChange = { token = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("Access token") },
-            )
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = { viewModel.connect(connectCode) },
+                enabled = connectCode.isNotBlank() && connectState !is ConnectState.Connecting,
+            ) { Text("Connect") }
+
+            Spacer(Modifier.height(12.dp))
+            when (val s = connectState) {
+                ConnectState.Idle -> {
+                    // Show the standing health once paired, so a returning user sees state.
+                    if (server.isConfigured) {
+                        HealthLine("Backend (API)", status.backend, status.backendDetail)
+                        Spacer(Modifier.height(4.dp))
+                        HealthLine("Media server", status.media)
+                    }
+                }
+                ConnectState.Connecting -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Connecting…")
+                }
+                is ConnectState.Connected -> Text(
+                    "✓ Connected as ${s.name}",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                is ConnectState.Error -> Text(
+                    "✗ ${s.message}",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
 
             Spacer(Modifier.height(20.dp))
             // --- Media server (MediaMTX): the stream target ---
@@ -118,24 +163,11 @@ fun StreamingSettingsScreen(
                 isError = !streamUrlValid,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             )
-
-            Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = { viewModel.saveAndTest(baseUrl, token, stream.copy(url = streamUrl.trim())) },
-                enabled = !testing,
-            ) { Text("Save & test connection") }
-
-            Spacer(Modifier.height(12.dp))
-            if (testing) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Checking servers…")
+            if (streamUrl.trim() != stream.url && streamUrlValid) {
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = { viewModel.setStreamSettings(stream.copy(url = streamUrl.trim())) }) {
+                    Text("Save stream URL")
                 }
-            } else {
-                HealthLine("Backend (API)", status.backend, status.backendDetail)
-                Spacer(Modifier.height(4.dp))
-                HealthLine("Media server", status.media)
             }
 
             SectionDivider()

@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.icons.lucide)
+    implementation(libs.zxing.android.embedded)
 
     // Hilt (dependency injection)
     implementation(libs.hilt.android)
