@@ -139,17 +139,19 @@ class DeviceApi @Inject constructor() {
 
     /**
      * Upload a locally-saved clip (multipart). Streams the file (never loads it into memory) and is
-     * idempotent per (recordingId, segmentNumber), so a retry after a timeout is safe. Returns true on 2xx.
+     * idempotent per [clipId] — a stable per-clip id reused verbatim on retry, so a retry after a
+     * timeout returns the existing segment instead of duplicating. The server assigns the segment
+     * number itself (shared with streamed segments), so we don't send one. Returns true on 2xx.
      */
     suspend fun uploadClip(
         config: ServerConfig,
         recordingId: String,
+        clipId: String,
         fileName: String,
         sizeBytes: Long,
         startIso: String,
         endIso: String,
         quality: String?,
-        segmentNumber: Int?,
         openStream: () -> InputStream,
     ): Boolean = withContext(Dispatchers.IO) {
         runCatching {
@@ -162,12 +164,10 @@ class DeviceApi @Inject constructor() {
             }
             val multipart = MultipartBody.Builder().setType(MultipartBody.FORM)
                 .addFormDataPart("file", fileName, fileBody)
+                .addFormDataPart("clipId", clipId) // server-side idempotency key; stable across retries
                 .addFormDataPart("startTime", startIso)
                 .addFormDataPart("endTime", endIso)
-                .apply {
-                    quality?.let { addFormDataPart("quality", it) }
-                    segmentNumber?.let { addFormDataPart("segmentNumber", it.toString()) }
-                }
+                .apply { quality?.let { addFormDataPart("quality", it) } }
                 .build()
             uploadClient.newCall(builder(config, "$RECORDINGS/$recordingId/clips").post(multipart).build())
                 .execute().use { it.isSuccessful }

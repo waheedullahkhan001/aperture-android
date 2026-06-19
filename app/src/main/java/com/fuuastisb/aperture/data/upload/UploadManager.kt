@@ -92,12 +92,13 @@ class UploadManager @Inject constructor(
         val ok = deviceApi.uploadClip(
             config = server,
             recordingId = item.recordingId,
+            // Stable per-clip idempotency key (the chunk's identity, unchanged across retries).
+            clipId = item.key,
             fileName = name,
             sizeBytes = size,
             startIso = Instant.ofEpochMilli(item.startMs).toString(),
             endIso = Instant.ofEpochMilli(item.endMs).toString(),
             quality = item.quality,
-            segmentNumber = item.segmentNumber,
             openStream = { context.contentResolver.openInputStream(uri) ?: error("cannot open $uri") },
         )
         return if (ok) UploadResult.SUCCESS else UploadResult.RETRY
