@@ -245,6 +245,15 @@ private fun ReadyStep(
     val emergency = active?.emergency ?: EmergencyState.Off
     val counting = emergency as? EmergencyState.CountingDown
 
+    // The cancel outcome is authoritative over the local countdown timer: if the server confirmed the
+    // cancel, alerts did NOT go out even though the local timer may have elapsed. Precedence below
+    // keeps the emergency status free of contradictions (no "Contacts alerted" + "Alerts cancelled").
+    val cancelDone = alertCancelState as? AlertCancelState.Done
+    val alertsCancelled = cancelDone != null && !cancelDone.alertsAlreadyDispatched
+    val cancelAttempt = (alertCancelState as? AlertCancelState.InProgress)?.attempt
+    val alertsDispatched = !alertsCancelled &&
+        (emergency == EmergencyState.AlertsDispatched || cancelDone?.alertsAlreadyDispatched == true)
+
     Text(
         text = if (isRecording) "Recording…" else "Ready",
         style = MaterialTheme.typography.headlineMedium,
@@ -267,7 +276,20 @@ private fun ReadyStep(
         )
     }
 
+    // Single emergency-status headline, precedence-ordered so it can't contradict itself.
     when {
+        alertsCancelled -> {
+            Spacer(Modifier.height(12.dp))
+            Text("✓ Alerts cancelled", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        }
+        cancelAttempt != null -> {
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+                Text("Cancelling the alert… (attempt $cancelAttempt)", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         counting != null -> {
             Spacer(Modifier.height(12.dp))
             Text(
@@ -277,7 +299,7 @@ private fun ReadyStep(
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        emergency == EmergencyState.AlertsDispatched -> {
+        alertsDispatched -> {
             Spacer(Modifier.height(12.dp))
             Text("Contacts alerted", color = MaterialTheme.colorScheme.error)
         }
@@ -307,30 +329,14 @@ private fun ReadyStep(
         }
     }
 
-    // While recording with a server set, you can ask it to cancel the emergency alert — it keeps
-    // retrying until the server confirms. Once alerts have already been dispatched there's nothing to
-    // cancel, so the affordance is hidden (the "Contacts alerted" line above conveys the state).
-    if (isRecording && serverConfigured && emergency != EmergencyState.AlertsDispatched) {
+    // The cancel action: only while the countdown is live and no cancel is in flight/finished — the
+    // in-progress and resolved states are shown by the headline above, so this never contradicts it.
+    if (serverConfigured && counting != null && alertCancelState is AlertCancelState.Idle) {
         Spacer(Modifier.height(8.dp))
-        when (val s = alertCancelState) {
-            AlertCancelState.Idle ->
-                OutlinedButton(onClick = onCancelAlerts, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Lucide.BellOff, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Cancel alerts")
-                }
-            is AlertCancelState.InProgress -> Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "Cancelling alerts… (attempt ${s.attempt})",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            is AlertCancelState.Done -> Text(
-                if (s.alertsAlreadyDispatched) "Alerts had already been sent" else "✓ Alerts cancelled",
-                color = MaterialTheme.colorScheme.primary,
-            )
+        OutlinedButton(onClick = onCancelAlerts, modifier = Modifier.fillMaxWidth()) {
+            Icon(Lucide.BellOff, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+            Text("Cancel alerts")
         }
     }
 
