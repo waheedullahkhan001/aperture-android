@@ -8,9 +8,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +21,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.CircleCheck
+import com.composables.icons.lucide.Info
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.TriangleAlert
 import com.fuuastisb.aperture.data.server.ServerHealth
 import com.fuuastisb.aperture.ui.settings.SettingsScaffold
 
@@ -63,7 +64,11 @@ private fun ServerRow(label: String, health: ServerHealth) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (ok) Icons.Default.CheckCircle else Icons.Default.Info,
+            imageVector = when {
+                ok -> Lucide.CircleCheck
+                problem -> Lucide.TriangleAlert
+                else -> Lucide.Info
+            },
             contentDescription = null,
             tint = when {
                 ok -> MaterialTheme.colorScheme.primary
@@ -100,7 +105,11 @@ private fun StatusRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (ok) Icons.Default.CheckCircle else Icons.Default.Info,
+            imageVector = when {
+                ok -> Lucide.CircleCheck
+                optional -> Lucide.Info
+                else -> Lucide.TriangleAlert
+            },
             contentDescription = null,
             tint = when {
                 ok -> MaterialTheme.colorScheme.primary

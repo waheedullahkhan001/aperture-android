@@ -18,10 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,6 +47,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.composables.icons.lucide.Accessibility
+import com.composables.icons.lucide.BellOff
+import com.composables.icons.lucide.Camera
+import com.composables.icons.lucide.CircleCheck
+import com.composables.icons.lucide.FileVideo
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Settings
+import com.composables.icons.lucide.Square
+import com.composables.icons.lucide.TriangleAlert
+import com.composables.icons.lucide.Video
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -134,13 +140,13 @@ fun HomeScreen(
                     val ready = permissionsGranted && accessibilityEnabled && !streamingBroken
                     IconButton(onClick = onOpenReadiness) {
                         Icon(
-                            imageVector = if (ready) Icons.Default.CheckCircle else Icons.Default.Warning,
+                            imageVector = if (ready) Lucide.CircleCheck else Lucide.TriangleAlert,
                             contentDescription = if (ready) "Ready" else "Setup incomplete",
                             tint = if (ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                         )
                     }
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        Icon(Lucide.Settings, contentDescription = "Settings")
                     }
                 },
             )
@@ -179,6 +185,13 @@ fun HomeScreen(
 
 @Composable
 private fun PermissionsStep(onGrant: () -> Unit) = CenteredColumn {
+    Icon(
+        Lucide.Camera,
+        contentDescription = null,
+        modifier = Modifier.size(48.dp),
+        tint = MaterialTheme.colorScheme.primary,
+    )
+    Spacer(Modifier.height(16.dp))
     Text("Permissions needed", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(12.dp))
     Text(
@@ -193,6 +206,13 @@ private fun PermissionsStep(onGrant: () -> Unit) = CenteredColumn {
 
 @Composable
 private fun AccessibilityStep(onOpenSettings: () -> Unit) = CenteredColumn {
+    Icon(
+        Lucide.Accessibility,
+        contentDescription = null,
+        modifier = Modifier.size(48.dp),
+        tint = MaterialTheme.colorScheme.primary,
+    )
+    Spacer(Modifier.height(16.dp))
     Text("Enable the volume trigger", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(12.dp))
     Text(
@@ -273,9 +293,17 @@ private fun ReadyStep(
             onClick = onStop,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-        ) { Text(if (counting != null) "Cancel — stop & don't alert" else "Stop recording") }
+        ) {
+            Icon(Lucide.Square, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+            Text(if (counting != null) "Cancel — stop & don't alert" else "Stop recording")
+        }
     } else {
-        Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Start recording") }
+        Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
+            Icon(Lucide.Video, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+            Text("Start recording")
+        }
     }
 
     // While recording with a server set, you can ask it to cancel the emergency alert — it keeps
@@ -285,6 +313,8 @@ private fun ReadyStep(
         when (val s = alertCancelState) {
             AlertCancelState.Idle ->
                 OutlinedButton(onClick = onCancelAlerts, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Lucide.BellOff, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                     Text("Cancel alerts")
                 }
             is AlertCancelState.InProgress -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -305,7 +335,11 @@ private fun ReadyStep(
     // Low-emphasis access to the saved-recordings library — present on the main screen, but not
     // competing with the primary record action.
     Spacer(Modifier.height(4.dp))
-    TextButton(onClick = onOpenRecordings) { Text("Recordings") }
+    TextButton(onClick = onOpenRecordings) {
+        Icon(Lucide.FileVideo, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+        Text("Recordings")
+    }
 }
 
 @Composable
