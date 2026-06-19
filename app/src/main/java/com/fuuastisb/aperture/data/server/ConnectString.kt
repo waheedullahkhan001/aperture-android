@@ -29,6 +29,17 @@ object ConnectString {
         throw IllegalArgumentException("That doesn't look like a valid connect code.")
     }
 
+    /** Re-encode a stored connection back into a connect code, so the pairing box can show what's set. */
+    fun encode(api: String, token: String, streamOverride: String?): String {
+        val o = JSONObject().apply {
+            put("v", 1)
+            put("api", api)
+            put("token", token)
+            if (!streamOverride.isNullOrBlank()) put("stream", streamOverride)
+        }
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(o.toString().toByteArray(Charsets.UTF_8))
+    }
+
     /** base64url → UTF-8 string. Pure + unit-tested; tolerates input with or without `=` padding. */
     fun decodeToJson(input: String): String {
         val cleaned = input.trim().filterNot { it.isWhitespace() }

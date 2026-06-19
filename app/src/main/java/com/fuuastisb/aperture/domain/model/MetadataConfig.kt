@@ -9,4 +9,9 @@ data class MetadataConfig(
     val location: Boolean = false,
     val timestamp: Boolean = true,
     val deviceInfo: Boolean = false,
+    // Motion & accuracy (speed/heading/altitude/accuracy) ride the location fix, so they only apply
+    // when [location] is on. Battery level is independent. Both default on — useful to a responder and
+    // not personally identifying.
+    val motion: Boolean = true,
+    val battery: Boolean = true,
 )

@@ -373,7 +373,7 @@ class RecordingService : LifecycleService() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setSmallIcon(R.drawable.ic_aperture)
             .setContentIntent(
                 PendingIntent.getActivity(
                     this,

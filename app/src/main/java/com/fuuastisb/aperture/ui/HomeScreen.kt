@@ -136,7 +136,8 @@ fun HomeScreen(
                     // The status icon tells the truth: a warning until the core gates (permissions +
                     // the accessibility trigger) are satisfied — and also when streaming is enabled but
                     // its media server is unreachable, so a broken stream can't hide behind a green tick.
-                    val streamingBroken = streamSettings.enabled && serverStatus.media == ServerHealth.Unreachable
+                    val streamingBroken = streamSettings.enabled &&
+                        (serverStatus.media == ServerHealth.Unreachable || serverStatus.backend == ServerHealth.Unreachable)
                     val ready = permissionsGranted && accessibilityEnabled && !streamingBroken
                     IconButton(onClick = onOpenReadiness) {
                         Icon(
@@ -307,8 +308,9 @@ private fun ReadyStep(
     }
 
     // While recording with a server set, you can ask it to cancel the emergency alert — it keeps
-    // retrying until the server confirms.
-    if (isRecording && serverConfigured) {
+    // retrying until the server confirms. Once alerts have already been dispatched there's nothing to
+    // cancel, so the affordance is hidden (the "Contacts alerted" line above conveys the state).
+    if (isRecording && serverConfigured && emergency != EmergencyState.AlertsDispatched) {
         Spacer(Modifier.height(8.dp))
         when (val s = alertCancelState) {
             AlertCancelState.Idle ->

@@ -38,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.QrCode
+import com.fuuastisb.aperture.data.server.ConnectString
 import com.fuuastisb.aperture.data.server.ServerHealth
 import com.fuuastisb.aperture.domain.model.VideoQuality
 import com.journeyapps.barcodescanner.ScanContract
@@ -62,7 +63,16 @@ fun StreamingSettingsScreen(
     val status by viewModel.serverStatus.collectAsStateWithLifecycle()
     val connectState by viewModel.connectState.collectAsStateWithLifecycle()
 
-    var connectCode by remember { mutableStateOf("") }
+    // Prefill the box with the current connection (re-encoded) so a returning user sees what's paired.
+    var connectCode by remember(server.baseUrl, server.token, stream.url) {
+        mutableStateOf(
+            if (server.isConfigured) {
+                ConnectString.encode(server.baseUrl, server.token, stream.url.ifBlank { null })
+            } else {
+                ""
+            },
+        )
+    }
     var streamUrl by remember(stream.url) { mutableStateOf(stream.url) }
 
     // GMS-free QR scan via ZXing's embedded scanner; a successful scan fills the connect-code box.

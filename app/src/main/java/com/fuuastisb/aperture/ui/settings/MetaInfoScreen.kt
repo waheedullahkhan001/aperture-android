@@ -75,7 +75,7 @@ fun MetaInfoScreen(
             ToggleRow(
                 title = "Location",
                 subtitle = if (locationGranted) {
-                    "Record GPS location with each recording."
+                    "Stream live GPS location during a recording."
                 } else {
                     "Needs location permission (optional)."
                 },
@@ -87,6 +87,18 @@ fun MetaInfoScreen(
                         viewModel.setMetadataConfig(config.copy(location = wantOn))
                     }
                 },
+            )
+            ToggleRow(
+                title = "Motion & accuracy",
+                subtitle = "Include speed, heading, altitude and accuracy with the location.",
+                checked = config.motion && config.location && locationGranted,
+                onCheckedChange = { viewModel.setMetadataConfig(config.copy(motion = it)) },
+            )
+            ToggleRow(
+                title = "Battery level",
+                subtitle = "Share the phone's battery percentage (\"about to die?\").",
+                checked = config.battery,
+                onCheckedChange = { viewModel.setMetadataConfig(config.copy(battery = it)) },
             )
         }
     }

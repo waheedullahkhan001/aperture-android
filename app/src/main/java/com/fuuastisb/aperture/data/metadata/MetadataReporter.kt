@@ -97,16 +97,17 @@ class MetadataReporter @Inject constructor(
 
     private fun snapshot(config: MetadataConfig): MetadataSnapshot {
         val loc = if (config.location) latestLocation else null
+        val motion = loc?.takeIf { config.motion } // speed/heading/altitude/accuracy, only with location
         return MetadataSnapshot(
             timestampMs = System.currentTimeMillis(),
             deviceModel = if (config.deviceInfo) "${Build.MANUFACTURER} ${Build.MODEL}" else null,
             latitude = loc?.latitude,
             longitude = loc?.longitude,
-            horizontalAccuracyM = loc?.takeIf { it.hasAccuracy() }?.accuracy,
-            speedMps = loc?.takeIf { it.hasSpeed() }?.speed,
-            bearingDeg = loc?.takeIf { it.hasBearing() }?.bearing,
-            altitudeM = loc?.takeIf { it.hasAltitude() }?.altitude,
-            batteryPercent = batteryPercent(),
+            horizontalAccuracyM = motion?.takeIf { it.hasAccuracy() }?.accuracy,
+            speedMps = motion?.takeIf { it.hasSpeed() }?.speed,
+            bearingDeg = motion?.takeIf { it.hasBearing() }?.bearing,
+            altitudeM = motion?.takeIf { it.hasAltitude() }?.altitude,
+            batteryPercent = if (config.battery) batteryPercent() else null,
         )
     }
 

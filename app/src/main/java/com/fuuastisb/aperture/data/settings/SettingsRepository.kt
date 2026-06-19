@@ -158,6 +158,8 @@ class SettingsRepository @Inject constructor(
             location = prefs[KEY_META_LOCATION] ?: MetadataConfig().location,
             timestamp = prefs[KEY_META_TIMESTAMP] ?: MetadataConfig().timestamp,
             deviceInfo = prefs[KEY_META_DEVICE] ?: MetadataConfig().deviceInfo,
+            motion = prefs[KEY_META_MOTION] ?: MetadataConfig().motion,
+            battery = prefs[KEY_META_BATTERY] ?: MetadataConfig().battery,
         )
     }
 
@@ -168,6 +170,8 @@ class SettingsRepository @Inject constructor(
             prefs[KEY_META_LOCATION] = config.location
             prefs[KEY_META_TIMESTAMP] = config.timestamp
             prefs[KEY_META_DEVICE] = config.deviceInfo
+            prefs[KEY_META_MOTION] = config.motion
+            prefs[KEY_META_BATTERY] = config.battery
         }
     }
     // endregion
@@ -211,6 +215,8 @@ class SettingsRepository @Inject constructor(
         val KEY_META_LOCATION = booleanPreferencesKey("meta_location")
         val KEY_META_TIMESTAMP = booleanPreferencesKey("meta_timestamp")
         val KEY_META_DEVICE = booleanPreferencesKey("meta_device_info")
+        val KEY_META_MOTION = booleanPreferencesKey("meta_motion")
+        val KEY_META_BATTERY = booleanPreferencesKey("meta_battery")
         val KEY_SERVER_URL = stringPreferencesKey("server_base_url")
         val KEY_SERVER_TOKEN = stringPreferencesKey("server_token")
     }
