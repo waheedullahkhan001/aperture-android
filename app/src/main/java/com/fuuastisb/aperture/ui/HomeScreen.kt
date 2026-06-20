@@ -319,7 +319,8 @@ private fun ReadyStep(
         ) {
             Icon(Lucide.Square, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
             Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-            Text(if (counting != null) "Cancel — stop & don't alert" else "Stop recording")
+            // Always "Stop recording" — cancelling the alert is the dedicated button's job now.
+            Text("Stop recording")
         }
     } else {
         Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
