@@ -21,6 +21,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Surfaced on the System-status screen so a build can be identified on-device. Sourced from the
+        // version catalog, so it reflects the RootEncoder version this APK was actually built against.
+        buildConfigField("String", "ROOT_ENCODER_VERSION", "\"${libs.versions.rootEncoder.get()}\"")
     }
 
     buildTypes {
@@ -36,6 +40,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
