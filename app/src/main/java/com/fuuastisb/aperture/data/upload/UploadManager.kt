@@ -13,6 +13,9 @@ import com.fuuastisb.aperture.data.settings.SettingsRepository
 import com.fuuastisb.aperture.domain.model.PendingUpload
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -40,6 +43,13 @@ class UploadManager @Inject constructor(
 ) {
     private val drainLock = Mutex()
 
+    // Observable status for the debug "Upload queue" screen: pending items (live state) + a small
+    // ring of recently finished ones (DONE/GAVE_UP), which are otherwise removed from the store.
+    @Volatile private var uploadingKey: String? = null
+    private val recentlyFinished = ArrayDeque<UploadClipStatus>()
+    private val _statuses = MutableStateFlow<List<UploadClipStatus>>(emptyList())
+    val statuses: StateFlow<List<UploadClipStatus>> = _statuses.asStateFlow()
+
     init {
         // Re-attempt the queue whenever connectivity returns.
         runCatching {
@@ -53,6 +63,7 @@ class UploadManager @Inject constructor(
     /** Attempt to drain the queue (no-op if already draining). Safe to call from anywhere. */
     fun kick() {
         appScope.launch {
+            refreshStatus() // reflect newly-queued items even if a drain is already running / we're offline
             if (!drainLock.tryLock()) return@launch
             try {
                 drain()
@@ -60,6 +71,37 @@ class UploadManager @Inject constructor(
                 drainLock.unlock()
             }
         }
+    }
+
+    /** Re-publish the current queue snapshot to [statuses] (for the debug screen to observe/refresh). */
+    fun refresh() {
+        appScope.launch { refreshStatus() }
+    }
+
+    private suspend fun refreshStatus() {
+        val pending = store.all().sortedBy { it.startMs }.map { item ->
+            UploadClipStatus(
+                recordingId = item.recordingId,
+                segmentNumber = item.segmentNumber,
+                startMs = item.startMs,
+                endMs = item.endMs,
+                quality = item.quality,
+                attempts = item.attempts,
+                state = when {
+                    item.key == uploadingKey -> UploadState.UPLOADING
+                    item.attempts > 0 -> UploadState.FAILED
+                    else -> UploadState.QUEUED
+                },
+            )
+        }
+        _statuses.value = pending + recentlyFinished.toList()
+    }
+
+    private fun recordFinished(item: PendingUpload, state: UploadState) {
+        recentlyFinished.addFirst(
+            UploadClipStatus(item.recordingId, item.segmentNumber, item.startMs, item.endMs, item.quality, item.attempts, state),
+        )
+        while (recentlyFinished.size > RECENT_CAP) recentlyFinished.removeLast()
     }
 
     private suspend fun drain() {
@@ -70,13 +112,21 @@ class UploadManager @Inject constructor(
         for (item in store.all().sortedBy { it.startMs }) {
             if (item.attempts >= MAX_ATTEMPTS) {
                 Log.w(TAG, "dropping ${item.key} after ${item.attempts} failed attempts")
+                recordFinished(item, UploadState.GAVE_UP)
                 store.remove(item.key)
+                refreshStatus()
                 continue
             }
-            when (upload(server, item)) {
-                UploadResult.SUCCESS, UploadResult.PERMANENT_SKIP -> store.remove(item.key)
+            uploadingKey = item.key
+            refreshStatus()
+            val result = upload(server, item)
+            uploadingKey = null
+            when (result) {
+                UploadResult.SUCCESS -> { recordFinished(item, UploadState.DONE); store.remove(item.key) }
+                UploadResult.PERMANENT_SKIP -> { recordFinished(item, UploadState.GAVE_UP); store.remove(item.key) }
                 UploadResult.RETRY -> store.incrementAttempts(item.key)
             }
+            refreshStatus()
         }
     }
 
@@ -127,5 +177,6 @@ class UploadManager @Inject constructor(
         const val TAG = "UploadManager"
         const val MAX_ATTEMPTS = 5
         const val MAX_UPLOAD_BYTES = 200L * 1024 * 1024 // server caps clips at 200 MB
+        const val RECENT_CAP = 15 // how many recently-finished clips to keep visible in the debug screen
     }
 }

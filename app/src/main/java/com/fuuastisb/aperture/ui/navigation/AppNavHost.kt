@@ -19,6 +19,7 @@ import com.fuuastisb.aperture.ui.settings.RecordingSettingsScreen
 import com.fuuastisb.aperture.ui.settings.SettingsHubScreen
 import com.fuuastisb.aperture.ui.settings.StorageSettingsScreen
 import com.fuuastisb.aperture.ui.settings.StreamingSettingsScreen
+import com.fuuastisb.aperture.ui.upload.UploadQueueScreen
 
 /** Navigation routes. Kept as plain strings for simplicity. */
 object Routes {
@@ -30,6 +31,7 @@ object Routes {
     const val NOTIFICATION = "settings/notification"
     const val METADATA = "settings/metadata"
     const val STORAGE = "settings/storage"
+    const val UPLOAD_QUEUE = "settings/uploads"
     const val ABOUT = "settings/about"
     const val RECORDINGS = "recordings"
     const val READINESS = "readiness"
@@ -81,6 +83,9 @@ fun AppNavHost() {
                 onBack = { nav.popBackStack() },
                 onOpenRecordings = { nav.navigate(Routes.RECORDINGS) },
             )
+        }
+        composable(Routes.UPLOAD_QUEUE) {
+            UploadQueueScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.ABOUT) {
             AboutScreen(onBack = { nav.popBackStack() })

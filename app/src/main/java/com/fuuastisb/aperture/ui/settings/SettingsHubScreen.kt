@@ -7,6 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.composables.icons.lucide.Bell
+import com.composables.icons.lucide.CloudUpload
 import com.composables.icons.lucide.HardDrive
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
@@ -60,6 +61,12 @@ fun SettingsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                 title = "Storage",
                 subtitle = "Size limit and auto-delete of old recordings",
                 onClick = { onOpen(Routes.STORAGE) },
+            )
+            SettingsRow(
+                icon = Lucide.CloudUpload,
+                title = "Upload queue",
+                subtitle = "Offline clips waiting to reach the server",
+                onClick = { onOpen(Routes.UPLOAD_QUEUE) },
             )
             SettingsRow(
                 icon = Lucide.Info,
