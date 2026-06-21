@@ -25,6 +25,7 @@ android {
         // Surfaced on the System-status screen so a build can be identified on-device. Sourced from the
         // version catalog, so it reflects the RootEncoder version this APK was actually built against.
         buildConfigField("String", "ROOT_ENCODER_VERSION", "\"${libs.versions.rootEncoder.get()}\"")
+        buildConfigField("String", "CAMERAX_VERSION", "\"${libs.versions.camerax.get()}\"")
     }
 
     buildTypes {

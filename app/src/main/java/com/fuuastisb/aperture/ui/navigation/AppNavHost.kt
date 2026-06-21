@@ -11,6 +11,7 @@ import androidx.navigation.compose.rememberNavController
 import com.fuuastisb.aperture.ui.HomeScreen
 import com.fuuastisb.aperture.ui.readiness.ReadinessScreen
 import com.fuuastisb.aperture.ui.recordings.RecordingsLibraryScreen
+import com.fuuastisb.aperture.ui.settings.AboutScreen
 import com.fuuastisb.aperture.ui.settings.ActivationSettingsScreen
 import com.fuuastisb.aperture.ui.settings.MetaInfoScreen
 import com.fuuastisb.aperture.ui.settings.NotificationSettingsScreen
@@ -29,6 +30,7 @@ object Routes {
     const val NOTIFICATION = "settings/notification"
     const val METADATA = "settings/metadata"
     const val STORAGE = "settings/storage"
+    const val ABOUT = "settings/about"
     const val RECORDINGS = "recordings"
     const val READINESS = "readiness"
 }
@@ -79,6 +81,9 @@ fun AppNavHost() {
                 onBack = { nav.popBackStack() },
                 onOpenRecordings = { nav.navigate(Routes.RECORDINGS) },
             )
+        }
+        composable(Routes.ABOUT) {
+            AboutScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.RECORDINGS) {
             RecordingsLibraryScreen(onBack = { nav.popBackStack() })

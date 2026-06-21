@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.HardDrive
+import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MapPin
 import com.composables.icons.lucide.Radio
@@ -59,6 +60,12 @@ fun SettingsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                 title = "Storage",
                 subtitle = "Size limit and auto-delete of old recordings",
                 onClick = { onOpen(Routes.STORAGE) },
+            )
+            SettingsRow(
+                icon = Lucide.Info,
+                title = "About",
+                subtitle = "App, stream-engine and device versions",
+                onClick = { onOpen(Routes.ABOUT) },
             )
         }
     }

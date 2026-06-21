@@ -3,7 +3,6 @@ package com.fuuastisb.aperture.ui.readiness
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -22,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.fuuastisb.aperture.BuildConfig
 import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
@@ -52,15 +50,6 @@ fun ReadinessScreen(
             StatusRow("Battery unrestricted", readiness.batteryUnrestricted, "Fix", viewModel::openBatterySettings)
             ServerRow("Backend (API)", serverStatus.backend)
             ServerRow("Media server", serverStatus.media)
-
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "Aperture Client ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · " +
-                    "stream engine ${BuildConfig.ROOT_ENCODER_VERSION}",
-                modifier = Modifier.padding(horizontal = 20.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

@@ -53,19 +53,13 @@ fun MetaInfoScreen(
                 .verticalScroll(rememberScrollState()),
         ) {
             Text(
-                "Optionally attach context to your recordings and stream pages. All of this is off " +
-                    "by default and is never required to record.",
+                "Optionally attach context to your recordings and stream pages. The timestamp is always " +
+                    "recorded; everything else is optional and never required to record.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(16.dp))
 
-            ToggleRow(
-                title = "Timestamp",
-                subtitle = "Record the date and time.",
-                checked = config.timestamp,
-                onCheckedChange = { viewModel.setMetadataConfig(config.copy(timestamp = it)) },
-            )
             ToggleRow(
                 title = "Device info",
                 subtitle = "Record the device model.",
