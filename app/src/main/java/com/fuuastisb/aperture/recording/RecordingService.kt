@@ -206,12 +206,11 @@ class RecordingService : LifecycleService() {
         countdownJob = null
         if (duringGrace) sessionId?.let { alertCanceller.requestCancel(it) }
 
-        // Best-effort "ended" hint to the backend (the media-server hook is authoritative).
+        // /end is the AUTHORITATIVE end now (a stream drop = INTERRUPTED server-side, not ended), so it
+        // must reliably reach the server when the user stops — retry it, don't fire-and-forget once.
         val id = sessionId
         val server = sessionServer
-        if (id != null && server != null) {
-            appScope.launch { runCatching { deviceApi.endRecording(server, id) } }
-        }
+        if (id != null && server != null) endSessionReliably(id, server)
 
         val current = recorder
         if (current != null) {
@@ -222,6 +221,24 @@ class RecordingService : LifecycleService() {
             startupJob?.cancel()
             startupJob = null
             teardown()
+        }
+    }
+
+    /**
+     * Reliably mark the recording ENDED on the backend (the authoritative end signal). Retries with
+     * backoff on its own process-lifetime scope so a transient network blip at stop time doesn't leave
+     * the recording stuck INTERRUPTED. Bounded — a missed /end is harmless (clips stay viewable), so we
+     * don't retry forever. Idempotent server-side, so a duplicate (e.g. stop then onDestroy) is fine.
+     */
+    private fun endSessionReliably(id: String, server: ServerConfig) {
+        appScope.launch {
+            var attempt = 0
+            while (attempt < END_MAX_ATTEMPTS) {
+                attempt++
+                if (runCatching { deviceApi.endRecording(server, id) }.getOrDefault(false)) return@launch
+                delay((1_000L shl (attempt - 1).coerceIn(0, 5)).coerceAtMost(30_000L))
+            }
+            Log.w(TAG, "Could not confirm /end after $attempt attempts; recording stays INTERRUPTED")
         }
     }
 
@@ -318,6 +335,11 @@ class RecordingService : LifecycleService() {
         startupJob?.cancel()
         countdownJob?.cancel()
         metadataReporter.stop()
+        // Killed without an explicit Stop (task removed / low-memory) while a session is still open:
+        // best-effort end it so it doesn't linger INTERRUPTED. If Stop already ran, sessionId is null.
+        val id = sessionId
+        val server = sessionServer
+        if (id != null && server != null) endSessionReliably(id, server)
         try { recorder?.stop() } catch (e: Exception) { Log.w(TAG, "recorder stop on destroy", e) }
         recorder = null
         sessionId = null
@@ -395,6 +417,7 @@ class RecordingService : LifecycleService() {
         private const val CHANNEL_ID = "recording"
         private const val MAX_RECORDING_MS = 60 * 60 * 1000L // wake-lock safety cap
         private const val MIN_FREE_BYTES = 200L * 1024 * 1024 // refuse to start under ~200 MB free
+        private const val END_MAX_ATTEMPTS = 10 // bounded retry of the authoritative /end call
 
         const val ACTION_START = "com.fuuastisb.aperture.action.START_RECORDING"
         const val ACTION_STOP = "com.fuuastisb.aperture.action.STOP_RECORDING"
