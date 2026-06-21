@@ -29,7 +29,7 @@ import javax.inject.Singleton
  *  - Uploads **during recording too** (the emergency case: get footage off the phone ASAP at
  *    reconnect), throttled by serial single-flight so it doesn't starve the recovering stream;
  *  - only when online and a server is configured;
- *  - bounded retries; a clip that keeps failing (or exceeds the 200 MB cap) is dropped.
+ *  - bounded retries; a clip that keeps failing (or exceeds the 512 MB cap) is dropped.
  *
  * Triggered on app start, when the network becomes available, and as each chunk finalises.
  */
@@ -134,9 +134,9 @@ class UploadManager @Inject constructor(
         val uri = runCatching { Uri.parse(item.uri) }.getOrNull() ?: return UploadResult.RETRY
         val name = displayName(uri) ?: "clip_${item.recordingId}_${item.segmentNumber}.mp4"
         val size = fileSize(uri) ?: return UploadResult.RETRY
-        // The server rejects clips over 200 MB — don't waste retries on one that can never succeed.
+        // The server rejects clips over the cap — don't waste retries on one that can never succeed.
         if (size > MAX_UPLOAD_BYTES) {
-            Log.w(TAG, "skipping ${item.key}: ${size / (1024 * 1024)} MB exceeds the 200 MB cap")
+            Log.w(TAG, "skipping ${item.key}: ${size / (1024 * 1024)} MB exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB cap")
             return UploadResult.PERMANENT_SKIP
         }
         val ok = deviceApi.uploadClip(
@@ -176,7 +176,7 @@ class UploadManager @Inject constructor(
     private companion object {
         const val TAG = "UploadManager"
         const val MAX_ATTEMPTS = 5
-        const val MAX_UPLOAD_BYTES = 200L * 1024 * 1024 // server caps clips at 200 MB
+        const val MAX_UPLOAD_BYTES = 512L * 1024 * 1024 // server (nginx + backend) caps clips at 512 MB
         const val RECENT_CAP = 15 // how many recently-finished clips to keep visible in the debug screen
     }
 }
