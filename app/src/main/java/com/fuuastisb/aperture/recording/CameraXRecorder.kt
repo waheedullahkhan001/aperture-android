@@ -47,6 +47,10 @@ class CameraXRecorder(
     private var cameraProvider: ProcessCameraProvider? = null
     private var recording: Recording? = null
 
+    // start() suspends twice (provider acquisition, then the Main-thread bind). If stop() lands in that
+    // window, we must NOT go on to bind + start a recording nothing can stop (a zombie). Set by stop().
+    @Volatile private var stopped = false
+
     // Camera/microphone permissions are granted during onboarding before recording is reachable; if
     // they are later revoked, the resulting SecurityException is caught by RecordingService.start()'s
     // try/catch and surfaced to the user, so a missing permission can't crash here.
@@ -55,9 +59,11 @@ class CameraXRecorder(
         val provider = withContext(Dispatchers.IO) {
             ProcessCameraProvider.getInstance(context).get()
         }
+        if (stopped) return // stopped during provider acquisition — don't bind anything
         cameraProvider = provider
 
         withContext(Dispatchers.Main) {
+            if (stopped) return@withContext // stopped before binding — don't start a recording nothing stops
             provider.unbindAll()
 
             val videoCapture = VideoCapture.Builder(
@@ -94,10 +100,14 @@ class CameraXRecorder(
     }
 
     override fun stop() {
-        recording?.stop()
+        stopped = true
+        val rec = recording
         recording = null
         cameraProvider?.unbindAll()
         cameraProvider = null
+        // A running recording's Finalize event drives onFinalized → teardown. If none was started yet
+        // (stop arrived during start()), trigger teardown directly so the service doesn't hang Active.
+        if (rec != null) rec.stop() else onFinalized(null)
     }
 
     private fun cameraSelector(): CameraSelector = when (config.lens) {

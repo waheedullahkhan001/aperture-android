@@ -45,13 +45,17 @@ class MetadataReporter @Inject constructor(
     private var listener: LocationListener? = null
     private var job: Job? = null
 
+    // start() and stop() can be called from different threads (appScope start, main/appScope teardown).
+    // Serialise them so a stop() can't race the listener registration inside start() and leak it.
+    private val lock = Any()
+
     private val locationManager: LocationManager?
         get() = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
 
-    /** Begin sampling for [recordingId], posting to [server], honouring [config]. Idempotent-ish: a new
-     *  start replaces any prior session. */
-    fun start(recordingId: String, server: ServerConfig, config: MetadataConfig) {
-        stop() // never run two samplers at once
+    /** Begin sampling for [recordingId], posting to [server], honouring [config]. A new start replaces
+     *  any prior session. */
+    fun start(recordingId: String, server: ServerConfig, config: MetadataConfig) = synchronized(lock) {
+        stop() // never run two samplers at once (reentrant on the same thread)
         latestLocation = null
         if (config.location && hasLocationPermission()) startLocationUpdates()
 
@@ -65,7 +69,7 @@ class MetadataReporter @Inject constructor(
     }
 
     /** Stop sampling and release location updates. */
-    fun stop() {
+    fun stop() = synchronized(lock) {
         job?.cancel()
         job = null
         listener?.let { l -> runCatching { locationManager?.removeUpdates(l) } }

@@ -14,12 +14,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.Info
@@ -36,7 +39,17 @@ fun ReadinessScreen(
 ) {
     val readiness by viewModel.readiness.collectAsStateWithLifecycle()
     val serverStatus by viewModel.serverStatus.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { viewModel.refresh() }
+
+    // Re-check on every resume — the "Fix" buttons leave to system settings, and the dashboard must
+    // reflect a just-granted permission when the user returns (a one-shot LaunchedEffect wouldn't).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     SettingsScaffold("System status", onBack) { padding ->
         Column(

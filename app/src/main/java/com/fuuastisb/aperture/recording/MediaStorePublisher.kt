@@ -53,6 +53,7 @@ object MediaStorePublisher {
         } catch (e: Exception) {
             Log.e(TAG, "Publish failed", e)
             resolver.delete(uri, null, null)
+            file.delete() // don't orphan the app-private source — it's invisible to the storage cap
             null
         }
     }

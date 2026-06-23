@@ -76,7 +76,8 @@ class MainViewModel @Inject constructor(
     }
 
     fun startRecording() {
-        alertCanceller.reset() // a fresh recording clears any prior alert-cancel state
+        // Alert-cancel state is reset in RecordingService.startRecording() (the common path for the
+        // volume trigger too), so we just kick off the recording here.
         appContext.startActivity(TransparentLauncherActivity.launchIntent(appContext))
     }
 

@@ -87,6 +87,8 @@ fun MetaInfoScreen(
                 subtitle = "Include speed, heading, altitude and accuracy with the location.",
                 checked = config.motion && config.location && locationGranted,
                 onCheckedChange = { viewModel.setMetadataConfig(config.copy(motion = it)) },
+                // Only meaningful with location on — disable so it can't silently persist while hidden.
+                enabled = config.location && locationGranted,
             )
             ToggleRow(
                 title = "Battery level",

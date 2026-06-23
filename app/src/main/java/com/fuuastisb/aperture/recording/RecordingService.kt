@@ -97,6 +97,10 @@ class RecordingService : LifecycleService() {
     private fun startRecording() {
         if (active) return // already recording; ignore a re-trigger
         active = true
+        // Clear any stale alert-cancel state/retry from a prior session. Done here (the common path for
+        // BOTH the volume trigger and the manual Start button) so a new emergency's cancel is never
+        // swallowed by a previous session's still-running cancel job.
+        alertCanceller.reset()
 
         startForegroundCompat(NotificationStyle.DISCREET)
         if (!wakeLock.isHeld) wakeLock.acquire(MAX_RECORDING_MS)
@@ -268,7 +272,10 @@ class RecordingService : LifecycleService() {
      */
     private fun startServerCountdown(endsAtIso: String) {
         val endMs = runCatching { Instant.parse(endsAtIso).toEpochMilli() }.getOrNull() ?: return
-        countdownJob = lifecycleScope.launch {
+        // On appScope, not lifecycleScope: this is started from launchBackendSession (also appScope), and
+        // a slow createRecording could resolve after the service's lifecycleScope is already cancelled,
+        // which would silently drop the countdown. The loop self-terminates on `active`.
+        countdownJob = appScope.launch {
             while (active) {
                 val remaining = endMs - System.currentTimeMillis()
                 if (remaining <= 0) break

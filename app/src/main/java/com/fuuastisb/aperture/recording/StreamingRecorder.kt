@@ -69,7 +69,10 @@ class StreamingRecorder(
     private var currentChunkFile: File? = null
     private var chunkIndex = 0
     private var chunkStartWallMs = 0L
-    private var chunkFullyLive = false       // was the stream live for this chunk's entire span?
+    // Written from RootEncoder's callback thread (markStreamDown) and read under recLock on the rotation
+    // thread, so it must be @Volatile — otherwise a dropped-stream chunk could be misread as fully-live
+    // and skipped for retro-upload, leaving a permanent gap server-side.
+    @Volatile private var chunkFullyLive = false
     @Volatile private var streamLive = false // current live state, sampled when a chunk starts
 
     // Set when we initiate stop(), so the stopStream-triggered callbacks don't try to reconnect.
