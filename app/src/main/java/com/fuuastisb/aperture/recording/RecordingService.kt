@@ -169,6 +169,8 @@ class RecordingService : LifecycleService() {
                     scope = appScope,
                     config = streamCapture,
                     audioEnabled = streamSettings.streamAudio,
+                    overrideBitrateBps = streamSettings.bitrateKbps * 1000,
+                    relativePath = storage.relativePath,
                     onStreamingState = ::updateStreamingState,
                     onChunk = { uri, startWall, endWall, segment, fullyLive ->
                         handleChunk(id, server, qualityLabel, uri, startWall, endWall, segment, fullyLive)
@@ -176,7 +178,7 @@ class RecordingService : LifecycleService() {
                     onFinalized = { onFinalized(null) },
                 )
             } else {
-                CameraXRecorder(this@RecordingService, this@RecordingService, config, ::onFinalized)
+                CameraXRecorder(this@RecordingService, this@RecordingService, config, storage.relativePath, ::onFinalized)
             }
             recorder = chosen
             try {

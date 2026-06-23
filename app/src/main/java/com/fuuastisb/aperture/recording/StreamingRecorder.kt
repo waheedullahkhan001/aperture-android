@@ -47,6 +47,9 @@ class StreamingRecorder(
     private val scope: CoroutineScope,
     private val config: RecordingConfig,
     private val audioEnabled: Boolean,
+    // Video bitrate in bits/s; 0 = derive from quality. The local chunks are published here.
+    private val overrideBitrateBps: Int,
+    private val relativePath: String,
     private val onStreamingState: (StreamingState) -> Unit,
     // Per finalized chunk: published Uri, wall-clock start/end, 1-based segment number, and whether the
     // stream was live for the chunk's whole span (if not, the server is missing it → retro-upload).
@@ -179,7 +182,7 @@ class StreamingRecorder(
         currentChunkFile = null
         try { if (stream?.isRecording == true) stream?.stopRecord() } catch (e: Exception) { Log.w(TAG, "stopRecord (chunk)", e) }
         // Publish to the gallery + report off the lock (publish is IO and survives teardown).
-        scope.launch { onChunk(MediaStorePublisher.publish(context, file), startWall, endWall, segment, fullyLive) }
+        scope.launch { onChunk(MediaStorePublisher.publish(context, file, relativePath), startWall, endWall, segment, fullyLive) }
     }
 
     /** Rotation tick: close the current chunk and open the next. Must hold [recLock]. */
@@ -248,7 +251,9 @@ class StreamingRecorder(
         VideoQuality.SD -> 848 to 480
     }
 
-    private fun videoBitrate(): Int = when (config.quality) {
+    private fun videoBitrate(): Int = if (overrideBitrateBps > 0) {
+        overrideBitrateBps
+    } else when (config.quality) {
         VideoQuality.FHD -> 4_000_000
         VideoQuality.HD -> 2_500_000
         VideoQuality.SD -> 1_200_000

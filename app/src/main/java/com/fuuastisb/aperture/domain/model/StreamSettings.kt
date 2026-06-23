@@ -14,6 +14,8 @@ data class StreamSettings(
     val quality: VideoQuality = VideoQuality.HD,
     val fps: Int = 30,
     val streamAudio: Boolean = true,
+    // Video bitrate in kbps; 0 = auto (derive from [quality]). User-selectable in Streaming settings.
+    val bitrateKbps: Int = 0,
 ) {
     /** Whether a recording should stream: enabled, with a non-blank, supported-scheme URL. */
     val isReadyToStream: Boolean

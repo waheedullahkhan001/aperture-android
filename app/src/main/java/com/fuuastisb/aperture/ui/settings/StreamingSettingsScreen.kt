@@ -15,11 +15,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -251,6 +255,12 @@ fun StreamingSettingsScreen(
                 canIncrement = effStreamFps < minOf(STREAM_MAX_FPS, recording.fps),
             )
 
+            Spacer(Modifier.height(12.dp))
+            BitrateDropdown(
+                selectedKbps = stream.bitrateKbps,
+                onSelect = { viewModel.setStreamSettings(stream.copy(bitrateKbps = it)) },
+            )
+
             Spacer(Modifier.height(4.dp))
             ToggleRow(
                 title = "Stream audio",
@@ -283,6 +293,42 @@ private fun HealthLine(label: String, health: ServerHealth, detail: String? = nu
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
     }
+}
+
+/** Stream video bitrate as a dropdown; "Auto" derives the bitrate from the selected quality. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BitrateDropdown(selectedKbps: Int, onSelect: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = bitrateLabel(selectedKbps),
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            label = { Text("Bitrate") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                .fillMaxWidth(),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            BITRATE_OPTIONS.forEach { kbps ->
+                DropdownMenuItem(
+                    text = { Text(bitrateLabel(kbps)) },
+                    onClick = { onSelect(kbps); expanded = false },
+                )
+            }
+        }
+    }
+}
+
+private val BITRATE_OPTIONS = listOf(0, 1000, 2500, 4000, 8000)
+
+private fun bitrateLabel(kbps: Int): String = when {
+    kbps <= 0 -> "Auto (from quality)"
+    kbps % 1000 == 0 -> "${kbps / 1000} Mbps"
+    else -> "${kbps / 1000.0} Mbps"
 }
 
 @Composable

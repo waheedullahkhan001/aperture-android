@@ -40,6 +40,7 @@ class CameraXRecorder(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner,
     private val config: RecordingConfig,
+    private val relativePath: String,
     private val onFinalized: (Uri?) -> Unit,
 ) : Recorder {
 
@@ -68,7 +69,7 @@ class CameraXRecorder(
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, name)
                 put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/Aperture")
+                put(MediaStore.Video.Media.RELATIVE_PATH, relativePath)
             }
             val output = MediaStoreOutputOptions
                 .Builder(context.contentResolver, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)

@@ -52,6 +52,7 @@ class SettingsRepository @Inject constructor(
                 ?: StreamSettings().quality,
             fps = prefs[KEY_STREAM_FPS] ?: StreamSettings().fps,
             streamAudio = prefs[KEY_STREAM_AUDIO] ?: StreamSettings().streamAudio,
+            bitrateKbps = prefs[KEY_STREAM_BITRATE] ?: StreamSettings().bitrateKbps,
         )
     }
 
@@ -64,6 +65,7 @@ class SettingsRepository @Inject constructor(
             prefs[KEY_STREAM_QUALITY] = settings.quality.name
             prefs[KEY_STREAM_FPS] = settings.fps
             prefs[KEY_STREAM_AUDIO] = settings.streamAudio
+            prefs[KEY_STREAM_BITRATE] = settings.bitrateKbps
         }
     }
     // endregion
@@ -125,6 +127,7 @@ class SettingsRepository @Inject constructor(
         StoragePolicy(
             maxBytes = prefs[KEY_STORAGE_MAX_BYTES] ?: StoragePolicy().maxBytes,
             autoDelete = prefs[KEY_STORAGE_AUTODELETE] ?: StoragePolicy().autoDelete,
+            relativePath = prefs[KEY_STORAGE_PATH]?.takeIf { it.isNotBlank() } ?: StoragePolicy().relativePath,
         )
     }
 
@@ -134,6 +137,7 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { prefs ->
             prefs[KEY_STORAGE_MAX_BYTES] = policy.maxBytes
             prefs[KEY_STORAGE_AUTODELETE] = policy.autoDelete
+            prefs[KEY_STORAGE_PATH] = policy.relativePath
         }
     }
     // endregion
@@ -198,6 +202,7 @@ class SettingsRepository @Inject constructor(
         val KEY_STREAM_QUALITY = stringPreferencesKey("stream_quality")
         val KEY_STREAM_FPS = intPreferencesKey("stream_fps")
         val KEY_STREAM_AUDIO = booleanPreferencesKey("stream_audio")
+        val KEY_STREAM_BITRATE = intPreferencesKey("stream_bitrate_kbps")
         val KEY_TRIGGER_BUTTON = stringPreferencesKey("trigger_button")
         val KEY_TRIGGER_PRESSES = intPreferencesKey("trigger_presses")
         val KEY_TRIGGER_WINDOW = longPreferencesKey("trigger_window_ms")
@@ -209,6 +214,7 @@ class SettingsRepository @Inject constructor(
         val KEY_RECORD_AUDIO = booleanPreferencesKey("record_audio")
         val KEY_STORAGE_MAX_BYTES = longPreferencesKey("storage_max_bytes")
         val KEY_STORAGE_AUTODELETE = booleanPreferencesKey("storage_auto_delete")
+        val KEY_STORAGE_PATH = stringPreferencesKey("storage_relative_path")
         val KEY_NOTIFICATION_STYLE = stringPreferencesKey("notification_style")
         val KEY_META_LOCATION = booleanPreferencesKey("meta_location")
         val KEY_META_DEVICE = booleanPreferencesKey("meta_device_info")

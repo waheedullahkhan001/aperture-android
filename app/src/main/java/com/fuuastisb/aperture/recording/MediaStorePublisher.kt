@@ -12,15 +12,15 @@ import java.io.File
 import java.io.FileInputStream
 
 /**
- * Moves an app-private recorded file into MediaStore (`Movies/Aperture`) so it shows up in the
- * gallery, then deletes the source. Used by the streaming pipeline, which writes its local MP4 to
- * app storage first; the CameraX pipeline writes to MediaStore directly and doesn't need this.
+ * Moves an app-private recorded file into MediaStore (at the configured `relativePath`, e.g.
+ * `Movies/Aperture`) so it shows up in the gallery, then deletes the source. Used by the streaming
+ * pipeline, which writes its local MP4 to app storage first; CameraX writes to MediaStore directly.
  */
 object MediaStorePublisher {
 
     private const val TAG = "MediaStorePublisher"
 
-    suspend fun publish(context: Context, file: File): Uri? = withContext(Dispatchers.IO) {
+    suspend fun publish(context: Context, file: File, relativePath: String): Uri? = withContext(Dispatchers.IO) {
         if (!file.exists() || file.length() == 0L) {
             Log.w(TAG, "Source missing or empty, skipping publish: $file")
             return@withContext null
@@ -29,7 +29,7 @@ object MediaStorePublisher {
         val values = ContentValues().apply {
             put(MediaStore.Video.Media.DISPLAY_NAME, file.name)
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-            put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/Aperture")
+            put(MediaStore.Video.Media.RELATIVE_PATH, relativePath)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
