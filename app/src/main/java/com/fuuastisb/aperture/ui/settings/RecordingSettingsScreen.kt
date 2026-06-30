@@ -66,6 +66,12 @@ fun RecordingSettingsScreen(
                 checked = config.recordAudio,
                 onCheckedChange = { viewModel.setRecordingConfig(config.copy(recordAudio = it)) },
             )
+            ToggleRow(
+                title = "Flash while recording",
+                subtitle = "Keep the camera light on for the whole recording (needs a lens with a flash).",
+                checked = config.torch,
+                onCheckedChange = { viewModel.setRecordingConfig(config.copy(torch = it)) },
+            )
             Spacer(Modifier.height(20.dp))
 
             Text("Camera", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)

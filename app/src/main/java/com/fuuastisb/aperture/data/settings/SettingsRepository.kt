@@ -106,6 +106,7 @@ class SettingsRepository @Inject constructor(
             fps = prefs[KEY_FPS] ?: RecordingConfig().fps,
             saveLocally = prefs[KEY_SAVE_LOCALLY] ?: RecordingConfig().saveLocally,
             recordAudio = prefs[KEY_RECORD_AUDIO] ?: RecordingConfig().recordAudio,
+            torch = prefs[KEY_TORCH] ?: RecordingConfig().torch,
         )
     }
 
@@ -118,6 +119,7 @@ class SettingsRepository @Inject constructor(
             prefs[KEY_FPS] = config.fps
             prefs[KEY_SAVE_LOCALLY] = config.saveLocally
             prefs[KEY_RECORD_AUDIO] = config.recordAudio
+            prefs[KEY_TORCH] = config.torch
         }
     }
     // endregion
@@ -212,6 +214,7 @@ class SettingsRepository @Inject constructor(
         val KEY_FPS = intPreferencesKey("video_fps")
         val KEY_SAVE_LOCALLY = booleanPreferencesKey("save_locally")
         val KEY_RECORD_AUDIO = booleanPreferencesKey("record_audio")
+        val KEY_TORCH = booleanPreferencesKey("record_torch")
         val KEY_STORAGE_MAX_BYTES = longPreferencesKey("storage_max_bytes")
         val KEY_STORAGE_AUTODELETE = booleanPreferencesKey("storage_auto_delete")
         val KEY_STORAGE_PATH = stringPreferencesKey("storage_relative_path")

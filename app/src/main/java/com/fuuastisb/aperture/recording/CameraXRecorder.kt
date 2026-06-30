@@ -69,7 +69,13 @@ class CameraXRecorder(
             val videoCapture = VideoCapture.Builder(
                 CameraXVideoRecorder.Builder().setQualitySelector(qualitySelector()).build(),
             ).setTargetFrameRate(Range(config.fps, config.fps)).build()
-            provider.bindToLifecycle(lifecycleOwner, cameraSelector(), videoCapture)
+            val camera = provider.bindToLifecycle(lifecycleOwner, cameraSelector(), videoCapture)
+            // Torch on for the whole session if requested and the lens has a flash. Released automatically
+            // by unbindAll() in stop().
+            if (config.torch && camera.cameraInfo.hasFlashUnit()) {
+                runCatching { camera.cameraControl.enableTorch(true) }
+                    .onFailure { Log.w(TAG, "enableTorch failed", it) }
+            }
 
             val name = "emergency_${TIMESTAMP_FORMAT.format(Date())}.mp4"
             val values = ContentValues().apply {

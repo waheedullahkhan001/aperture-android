@@ -140,6 +140,13 @@ class StreamingRecorder(
 
         onStreamingState(StreamingState.Connecting)
         genericStream.startStream(url)
+
+        // Torch on for the session if requested (camera is open by now). No-op/ignored on a lens with no
+        // flash; turns off when the camera is released in stop(). Device-validated behaviour.
+        if (config.torch) {
+            runCatching { cameraSource.enableLantern() }
+                .onFailure { Log.w(TAG, "enableLantern failed (no flash on this lens?)", it) }
+        }
     }
 
     override fun stop() {

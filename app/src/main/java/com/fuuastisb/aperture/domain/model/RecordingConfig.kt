@@ -34,4 +34,7 @@ data class RecordingConfig(
     // or a trigger would capture nothing. [quality]/[fps] above apply to the local copy.
     val saveLocally: Boolean = true,
     val recordAudio: Boolean = true,
+    // Keep the camera flash (torch) on for the whole recording — useful in the dark. Applies to both
+    // the local and streaming pipelines; ignored on a lens with no flash unit (e.g. most front cameras).
+    val torch: Boolean = false,
 )
